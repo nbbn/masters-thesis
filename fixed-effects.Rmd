@@ -1,0 +1,85 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Data loading
+============
+
+```{r}
+wse_data = read.csv("/home/js/projects/gt_magisterka/final-results-models/20170527_1454_output_NC_LVM/uber_data.csv")
+```
+
+Let's install needed libraries.
+```{r}
+if(!require(car)){
+    install.packages("car")
+    library(car)
+}
+if(!require(gplots)){
+    install.packages("gplots")
+    library(gplots)
+}
+if(!require(plm)){
+    install.packages("plm")
+    library(plm)
+}
+if(!require(xtable)){
+  install.packages("xtable")
+  library(xtable)
+}
+
+```
+Now confirm results of ols.
+```{r}
+ols = lm(LEV_LTM ~ MB + Size + TANG + PROF + DivPayer + CFVol + LEV_IMed + growth_phase + gov_owned, data=wse_data)
+summary(ols)
+```
+Do we need fixed effects?
+```{r}
+par(mar=c(0,0,0,0))
+scatterplot(LEV_LTB~year|growth_phase, boxplots=TRUE, smooth=FALSE, reg.line=FALSE, data=wse_data)
+plotmeans(LEV_LTM ~ c(isin), main="Heterogeineity across years", data=wse_data)
+```
+
+
+Ok, let's make some fixed effects model.
+
+
+ISIN / YEAR
+
+```{r}
+# help(plm)
+fixed <- plm(LEV_LTB ~ MB + Size + TANG + PROF + DivPayer + CFVol + growth_phase, data=wse_data, index=c("isin"), model = 'within', effect="individual")
+# fixef(fixed,effect="time")
+# summary(fixef(fixed))
+summary(fixed)
+```
+
+ISIN
+```{r, message=TRUE, warning=TRUE}
+options("scipen"=999)
+
+listoffactors <- c("MB", "Size", "TANG", "PROF", "DivPayer", "CFVol", "LEV_IMed", "growth_phase")
+
+ind = c("year")
+
+f = reformulate(termlabels = listoffactors, response = 'LEV_LTM')
+
+fixed = plm(f, data=wse_data, index=ind, model="within", effect = "time")
+random = plm(f, data=wse_data, index=ind, model="random")
+ols = lm(f, data=wse_data)
+pool = plm(f, data=wse_data, index=ind, model="pooling")
+
+summary(ols)$adj.r.squared
+
+summary(fixed)
+# Hausman test
+phtest(fixed, random)
+
+# breusch-Pagan model
+plmtest(pool, type=c("bp"))
+
+# f test
+pFtest(fixed, ols)
+```
